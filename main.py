@@ -39,6 +39,8 @@ def device_worker(port):
     score_1_img = load_template('score_1.png')
     score_redJ_img = load_template('score_redJ.png')
     ranking_img = load_template('ranking.png')
+    koukan_1_img = load_template('koukan_1.png')
+    koukan_2_img = load_template('koukan_2.png')
     # タップ対象画像
     box_key_list_close_img = load_template('box-key_list_close.png')
     score_close_img = load_template('score_close.png')
@@ -124,6 +126,24 @@ def device_worker(port):
                     tap(device, score_close_pos)
                 else:
                     print(f'ranking.png検出したがscore_close.png見つからず ({serial})')
+                continue
+            
+            # ⑤koukan_1.pngを検知したらkoukan_1.png自体をタップ
+            koukan_1_pos = find_image_on_screen(koukan_1_img, screenshot, threshold=0.8)
+            if koukan_1_pos:
+                print(f'koukan_1.png検出→koukan_1.pngタップ ({serial})')
+                tap(device, koukan_1_pos)
+                continue
+            
+            # ⑥koukan_2.pngを検知したらscore_close.pngをタップ
+            koukan_2_pos = find_image_on_screen(koukan_2_img, screenshot, threshold=0.8)
+            if koukan_2_pos:
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                if score_close_pos:
+                    print(f'koukan_2.png検出→score_close.pngタップ ({serial})')
+                    tap(device, score_close_pos)
+                else:
+                    print(f'koukan_2.png検出したがscore_close.png見つからず ({serial})')
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
