@@ -5,6 +5,7 @@ from image_util import load_template, find_image_on_screen
 from device_util import get_screenshot, tap
 import threading
 import subprocess
+from datetime import datetime
 
 PORTS = [5725, 5735, 5695]
 
@@ -28,6 +29,11 @@ def is_app_running(device, package_name):
 
 def device_worker(port):
     serial = f'127.0.0.1:{port}'
+    # フレームレート計測用変数
+    last_time = time.time()
+    frame_count = 0
+    fps_display_interval = 30  # 30フレームごとにFPSを表示
+    
     home_img = load_template('home.png')
     google_play_img = load_template('google_play.png')
     google_login_img = load_template('google_login.png')
@@ -49,22 +55,55 @@ def device_worker(port):
         try:
             # エミュレーターが起動していない場合は何も出力せずスキップ
             if serial not in [d.serial for d in adb.device_list()]:
-                time.sleep(5)
+                time.sleep(0.5)  # デバイス未接続時のみ少し長めの待機
                 continue
             device = adb.device(serial=serial)
             # アプリが起動していない場合もスキップ
             if not is_app_running(device, 'com.Level5.YWP'):
-                time.sleep(5)
+                time.sleep(0.5)  # アプリ未起動時のみ少し長めの待機
                 continue
             screenshot = get_screenshot(device)
             
+            # フレームレート計測とリアルタイム表示
+            frame_count += 1
+            current_time = time.time()
+            if frame_count % fps_display_interval == 0:
+                elapsed_time = current_time - last_time
+                fps = fps_display_interval / elapsed_time
+                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                print(f'[{timestamp}] スクショ撮影中 - FPS: {fps:.1f} ({serial})')
+                last_time = current_time
+            
+            # score_redJ.pngとplay.pngの両方が同時に検知されたらscore_close.pngをタップ
+            score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
+            play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
+            if score_redJ_pos and play_pos:
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                if score_close_pos:
+                    print(f'score_redJ.pngとplay.png同時検出→score_close.pngタップ ({serial})')
+                    tap(device, score_close_pos)
+                else:
+                    print(f'score_redJ.pngとplay.png同時検出したがscore_close.png見つからず ({serial})')
+                continue
+            
+            # team.pngとplay.pngの両方が同時に検知されたらbox-key_list_close.pngをタップ
+            team_pos = find_image_on_screen(team_img, screenshot, threshold=0.8)
+            if team_pos and play_pos:
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                if box_key_close_pos:
+                    print(f'team.pngとplay.png同時検出→box-key_list_close.pngタップ ({serial})')
+                    tap(device, box_key_close_pos)
+                else:
+                    print(f'team.pngとplay.png同時検出したがbox-key_list_close.png見つからず ({serial})')
+                continue
+            
             # play.pngが検出されたら検出されなくなるまで連打
-            play_pos = find_image_on_screen(play_img, screenshot, threshold=0.78)
+            play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
             if play_pos:
                 print(f'play.png検出→連打開始 ({serial})')
                 while True:
                     screenshot = get_screenshot(device)
-                    play_pos = find_image_on_screen(play_img, screenshot, threshold=0.78)
+                    play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
                     if play_pos:
                         print(f'play.png連打中→タップ ({serial})')
                         tap(device, play_pos)
@@ -159,16 +198,18 @@ def device_worker(port):
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
-            home_pos = find_image_on_screen(home_img, screenshot, threshold=0.8)
-            google_play_pos = find_image_on_screen(google_play_img, screenshot, threshold=0.8)
-            google_login_pos = find_image_on_screen(google_login_img, screenshot, threshold=0.8)
-            gmail_pos = find_image_on_screen(gmail_img, screenshot, threshold=0.8)
+            # 閾値を厳しくして誤検知を減らす（単一画像での判定）
+            home_pos = find_image_on_screen(home_img, screenshot, threshold=0.95)
+            google_play_pos = find_image_on_screen(google_play_img, screenshot, threshold=0.95)
+            google_login_pos = find_image_on_screen(google_login_img, screenshot, threshold=0.95)
+            gmail_pos = find_image_on_screen(gmail_img, screenshot, threshold=0.95)
+            
             if home_pos or google_play_pos or google_login_pos or gmail_pos:
                 print(f'クラッシュ復帰処理を実行します... ({serial})')
                 crash_recovery(device)
         except Exception as e:
             print(f'デバイス {serial} でエラー: {e}')
-        time.sleep(5)
+        time.sleep(0.0069)  # 約0.0069秒間隔（1秒に144回実行）
 
 def main():
     print('クラッシュ復帰専用スクリプト 起動')
