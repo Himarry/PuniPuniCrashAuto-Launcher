@@ -41,6 +41,7 @@ def device_worker(port):
     ranking_img = load_template('ranking.png')
     koukan_1_img = load_template('koukan_1.png')
     koukan_2_img = load_template('koukan_2.png')
+    team_img = load_template('team.png')
     # タップ対象画像
     box_key_list_close_img = load_template('box-key_list_close.png')
     score_close_img = load_template('score_close.png')
@@ -58,12 +59,12 @@ def device_worker(port):
             screenshot = get_screenshot(device)
             
             # play.pngが検出されたら検出されなくなるまで連打
-            play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
+            play_pos = find_image_on_screen(play_img, screenshot, threshold=0.78)
             if play_pos:
                 print(f'play.png検出→連打開始 ({serial})')
                 while True:
                     screenshot = get_screenshot(device)
-                    play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
+                    play_pos = find_image_on_screen(play_img, screenshot, threshold=0.78)
                     if play_pos:
                         print(f'play.png連打中→タップ ({serial})')
                         tap(device, play_pos)
@@ -96,9 +97,9 @@ def device_worker(port):
                 continue
             
             # ②score_1.pngを検知したらbox-key_list_close.pngをタップ
-            score_1_pos = find_image_on_screen(score_1_img, screenshot, threshold=0.8)
+            score_1_pos = find_image_on_screen(score_1_img, screenshot, threshold=0.7)
             if score_1_pos:
-                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.7)
                 if box_key_close_pos:
                     print(f'score_1.png検出→box-key_list_close.pngタップ ({serial})')
                     tap(device, box_key_close_pos)
@@ -107,9 +108,9 @@ def device_worker(port):
                 continue
             
             # ③score_redJ.pngを検知したらscore_close.pngをタップ
-            score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
+            score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.7)
             if score_redJ_pos:
-                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.7)
                 if score_close_pos:
                     print(f'score_redJ.png検出→score_close.pngタップ ({serial})')
                     tap(device, score_close_pos)
@@ -118,9 +119,9 @@ def device_worker(port):
                 continue
             
             # ④ranking.pngを検知したらscore_close.pngをタップ
-            ranking_pos = find_image_on_screen(ranking_img, screenshot, threshold=0.8)
+            ranking_pos = find_image_on_screen(ranking_img, screenshot, threshold=0.6)
             if ranking_pos:
-                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.7)
                 if score_close_pos:
                     print(f'ranking.png検出→score_close.pngタップ ({serial})')
                     tap(device, score_close_pos)
@@ -136,14 +137,25 @@ def device_worker(port):
                 continue
             
             # ⑥koukan_2.pngを検知したらscore_close.pngをタップ
-            koukan_2_pos = find_image_on_screen(koukan_2_img, screenshot, threshold=0.8)
+            koukan_2_pos = find_image_on_screen(koukan_2_img, screenshot, threshold=0.7)
             if koukan_2_pos:
-                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.7)
                 if score_close_pos:
                     print(f'koukan_2.png検出→score_close.pngタップ ({serial})')
                     tap(device, score_close_pos)
                 else:
                     print(f'koukan_2.png検出したがscore_close.png見つからず ({serial})')
+                continue
+            
+            # ⑦team.pngを検知したらbox-key_list_close.pngをタップ
+            team_pos = find_image_on_screen(team_img, screenshot, threshold=0.7)
+            if team_pos:
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.7)
+                if box_key_close_pos:
+                    print(f'team.png検出→box-key_list_close.pngタップ ({serial})')
+                    tap(device, box_key_close_pos)
+                else:
+                    print(f'team.png検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
