@@ -48,9 +48,18 @@ def device_worker(port):
     koukan_1_img = load_template('koukan_1.png')
     koukan_2_img = load_template('koukan_2.png')
     team_img = load_template('team.png')
+    score_item_img = load_template('score_item.png')
+    team_yokai_img = load_template('team_yokai.png')
+    whisper_img = load_template('whisper.png')
+    ranking_2_img = load_template('ranking_2.png')
+    yubin_img = load_template('yubin.png')
+    boss_img = load_template('boss.png')
+    click_start_img = load_template('click_start.png')
+    score_atk_img = load_template('score_atk.png')
     # タップ対象画像
     box_key_list_close_img = load_template('box-key_list_close.png')
     score_close_img = load_template('score_close.png')
+    click_stop_img = load_template('click_stop.png')
     while True:
         try:
             # エミュレーターが起動していない場合は何も出力せずスキップ
@@ -63,6 +72,24 @@ def device_worker(port):
                 time.sleep(0.5)  # アプリ未起動時のみ少し長めの待機
                 continue
             screenshot = get_screenshot(device)
+            
+            # score_atk.pngが検知された場合はscore_close.pngとwhisper.png以外の操作を無効化
+            score_atk_pos = find_image_on_screen(score_atk_img, screenshot, threshold=0.8)
+            if score_atk_pos:
+                print(f'score_atk.png検出 → score_close.pngとwhisper.png以外の操作無効化 ({serial})')
+                # score_close.pngをチェックしてタップ
+                score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
+                if score_close_pos:
+                    print(f'score_atk.png画面でscore_close.png検出→タップ ({serial})')
+                    tap(device, score_close_pos)
+                    continue
+                # whisper.pngをチェックしてタップ
+                whisper_pos = find_image_on_screen(whisper_img, screenshot, threshold=0.8)
+                if whisper_pos:
+                    print(f'score_atk.png画面でwhisper.png検出→タップ ({serial})')
+                    tap(device, whisper_pos)
+                    continue
+                continue
             
             # フレームレート計測とリアルタイム表示
             frame_count += 1
@@ -97,19 +124,73 @@ def device_worker(port):
                     print(f'team.pngとplay.png同時検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
             
+            # whisper.pngとranking_2.pngの両方が同時に検知されたらwhisper.pngをタップ
+            whisper_pos = find_image_on_screen(whisper_img, screenshot, threshold=0.8)
+            ranking_2_pos = find_image_on_screen(ranking_2_img, screenshot, threshold=0.8)
+            if whisper_pos and ranking_2_pos:
+                print(f'whisper.pngとranking_2.png同時検出→whisper.pngタップ ({serial})')
+                tap(device, whisper_pos)
+                continue
+            
+            # boss.pngとclick_start.pngの両方が同時に検知されたらclick_start.pngをタップ
+            # ただし、click_stop.pngが表示されている場合はタップしない
+            boss_pos = find_image_on_screen(boss_img, screenshot, threshold=0.8)
+            click_start_pos = find_image_on_screen(click_start_img, screenshot, threshold=0.95)
+            click_stop_pos = find_image_on_screen(click_stop_img, screenshot, threshold=0.95)
+            
+            if boss_pos and click_start_pos and not click_stop_pos:
+                print(f'boss.pngとclick_start.png同時検出（stop状態ではない）→click_start.pngタップ ({serial})')
+                tap(device, click_start_pos)
+                continue
+            elif boss_pos and click_start_pos and click_stop_pos:
+                print(f'boss.pngとclick_start.png検出したがstop状態のためタップしない ({serial})')
+                continue
+            
             # play.pngが検出されたら検出されなくなるまで連打
             play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
             if play_pos:
-                print(f'play.png検出→連打開始 ({serial})')
-                while True:
-                    screenshot = get_screenshot(device)
-                    play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
-                    if play_pos:
-                        print(f'play.png連打中→タップ ({serial})')
-                        tap(device, play_pos)
-                    else:
-                        print(f'play.png検出されなくなりました→連打終了 ({serial})')
-                        break
+                # play.pngタップの抑制条件をチェック
+                score_item_pos = find_image_on_screen(score_item_img, screenshot, threshold=0.8)
+                team_yokai_pos = find_image_on_screen(team_yokai_img, screenshot, threshold=0.8)
+                score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
+                team_pos = find_image_on_screen(team_img, screenshot, threshold=0.8)
+                
+                # 抑制条件の判定
+                suppress_play = False
+                if score_item_pos and team_yokai_pos:
+                    print(f'score_item.png + team_yokai.png検出中 → play.pngタップ抑制 ({serial})')
+                    suppress_play = True
+                elif score_item_pos and score_redJ_pos:
+                    print(f'score_item.png + score_redJ.png検出中 → play.pngタップ抑制 ({serial})')
+                    suppress_play = True
+                elif score_item_pos and team_pos:
+                    print(f'score_item.png + team.png検出中 → play.pngタップ抑制 ({serial})')
+                    suppress_play = True
+                
+                if not suppress_play:
+                    print(f'play.png検出→連打開始 ({serial})')
+                    while True:
+                        screenshot = get_screenshot(device)
+                        play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
+                        if play_pos:
+                            # 連打中も抑制条件を再チェック
+                            score_item_pos = find_image_on_screen(score_item_img, screenshot, threshold=0.8)
+                            team_yokai_pos = find_image_on_screen(team_yokai_img, screenshot, threshold=0.8)
+                            score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
+                            team_pos = find_image_on_screen(team_img, screenshot, threshold=0.8)
+                            
+                            # 連打中の抑制条件チェック
+                            if (score_item_pos and team_yokai_pos) or \
+                               (score_item_pos and score_redJ_pos) or \
+                               (score_item_pos and team_pos):
+                                print(f'連打中に抑制条件検出 → 連打停止 ({serial})')
+                                break
+                            
+                            print(f'play.png連打中→タップ ({serial})')
+                            tap(device, play_pos)
+                        else:
+                            print(f'play.png検出されなくなりました→連打終了 ({serial})')
+                            break
                 continue  # play処理完了後は次のループへ
             
             # result_next.pngが検出されたら検出されなくなるまで連打
@@ -195,6 +276,28 @@ def device_worker(port):
                     tap(device, box_key_close_pos)
                 else:
                     print(f'team.png検出したがbox-key_list_close.png見つからず ({serial})')
+                continue
+            
+            # ⑧yubin.pngを検知したらbox-key_list_close.pngをタップ
+            yubin_pos = find_image_on_screen(yubin_img, screenshot, threshold=0.8)
+            if yubin_pos:
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                if box_key_close_pos:
+                    print(f'yubin.png検出→box-key_list_close.pngタップ ({serial})')
+                    tap(device, box_key_close_pos)
+                else:
+                    print(f'yubin.png検出したがbox-key_list_close.png見つからず ({serial})')
+                continue
+            
+            # ⑨whisper.pngを検知したらclick_stop.pngをタップ
+            whisper_pos = find_image_on_screen(whisper_img, screenshot, threshold=0.8)
+            if whisper_pos:
+                click_stop_pos = find_image_on_screen(click_stop_img, screenshot, threshold=0.95)
+                if click_stop_pos:
+                    print(f'whisper.png検出→click_stop.pngタップ ({serial})')
+                    tap(device, click_stop_pos)
+                else:
+                    print(f'whisper.png検出したがclick_stop.png見つからず ({serial})')
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
