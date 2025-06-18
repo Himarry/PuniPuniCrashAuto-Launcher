@@ -27,6 +27,18 @@ def is_app_running(device, package_name):
         print(f'アプリの状態を確認中にエラーが発生しました: {e}')
         return False
 
+def safe_tap(device, tap_pos, team_3_pos, serial, action_name):
+    """team_3.pngとの重複をチェックしてからタップする安全な関数"""
+    if team_3_pos and tap_pos:
+        # 座標の距離をチェック（50ピクセル以内なら重複とみなす）
+        distance = ((tap_pos[0] - team_3_pos[0])**2 + (tap_pos[1] - team_3_pos[1])**2)**0.5
+        if distance < 50:
+            print(f'{action_name}タップ位置がteam_3.pngと重複のためタップ無効化 ({serial})')
+            return False
+    
+    tap(device, tap_pos)
+    return True
+
 def device_worker(port):
     serial = f'127.0.0.1:{port}'
     # フレームレート計測用変数
@@ -50,11 +62,13 @@ def device_worker(port):
     team_img = load_template('team.png')
     score_item_img = load_template('score_item.png')
     team_yokai_img = load_template('team_yokai.png')
-    team_3_img = load_template('team_3.png')
     whisper_img = load_template('whisper.png')
     ranking_2_img = load_template('ranking_2.png')
     yubin_img = load_template('yubin.png')
     score_atk_img = load_template('score_atk.png')
+    team_3_img = load_template('team_3.png')
+    takara_img = load_template('takara.png')
+    key_img = load_template('key.png')
     # タップ対象画像
     box_key_list_close_img = load_template('box-key_list_close.png')
     score_close_img = load_template('score_close.png')
@@ -73,6 +87,9 @@ def device_worker(port):
             
             # score_atk.pngが検知された場合はscore_close.pngとwhisper.png以外の操作を無効化
             score_atk_pos = find_image_on_screen(score_atk_img, screenshot, threshold=0.8)
+            # team_3.pngの誤検知防止用チェック
+            team_3_pos = find_image_on_screen(team_3_img, screenshot, threshold=0.8)
+            
             if score_atk_pos:
                 print(f'score_atk.png検出 → score_close.pngとwhisper.png以外の操作無効化 ({serial})')
                 # score_close.pngをチェックしてタップ
@@ -99,6 +116,28 @@ def device_worker(port):
                 print(f'[{timestamp}] スクショ撮影中 - FPS: {fps:.1f} ({serial})')
                 last_time = current_time
             
+            # takara.pngが検知されている場合はbox-key_list_close.png以外タップ禁止
+            takara_pos = find_image_on_screen(takara_img, screenshot, threshold=0.8)
+            if takara_pos:
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                if box_key_close_pos:
+                    print(f'takara.png検出→box-key_list_close.pngタップ ({serial})')
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
+                else:
+                    print(f'takara.png検出中→box-key_list_close.png以外タップ禁止 ({serial})')
+                continue
+            
+            # key.pngが検知されている場合はbox-key_list_close.png以外タップ禁止
+            key_pos = find_image_on_screen(key_img, screenshot, threshold=0.8)
+            if key_pos:
+                box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                if box_key_close_pos:
+                    print(f'key.png検出→box-key_list_close.pngタップ ({serial})')
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
+                else:
+                    print(f'key.png検出中→box-key_list_close.png以外タップ禁止 ({serial})')
+                continue
+            
             # score_redJ.pngとplay.pngの両方が同時に検知されたらscore_close.pngをタップ
             score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
             play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
@@ -106,7 +145,7 @@ def device_worker(port):
                 score_close_pos = find_image_on_screen(score_close_img, screenshot, threshold=0.8)
                 if score_close_pos:
                     print(f'score_redJ.pngとplay.png同時検出→score_close.pngタップ ({serial})')
-                    tap(device, score_close_pos)
+                    safe_tap(device, score_close_pos, team_3_pos, serial, 'score_close.png')
                 else:
                     print(f'score_redJ.pngとplay.png同時検出したがscore_close.png見つからず ({serial})')
                 continue
@@ -117,7 +156,7 @@ def device_worker(port):
                 box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
                 if box_key_close_pos:
                     print(f'team.pngとplay.png同時検出→box-key_list_close.pngタップ ({serial})')
-                    tap(device, box_key_close_pos)
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
                 else:
                     print(f'team.pngとplay.png同時検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
@@ -127,7 +166,7 @@ def device_worker(port):
             ranking_2_pos = find_image_on_screen(ranking_2_img, screenshot, threshold=0.8)
             if whisper_pos and ranking_2_pos:
                 print(f'whisper.pngとranking_2.png同時検出→whisper.pngタップ ({serial})')
-                tap(device, whisper_pos)
+                safe_tap(device, whisper_pos, team_3_pos, serial, 'whisper.png')
                 continue
             
             # play.pngが検出されたら検出されなくなるまで連打
@@ -182,19 +221,27 @@ def device_worker(port):
                 continue  # play処理完了後は次のループへ
             
             # result_next.pngが検出されたら検出されなくなるまで連打
-            result_next_pos = find_image_on_screen(result_next_img, screenshot, threshold=0.7)
-            if result_next_pos:
-                print(f'result_next.png検出→連打開始 ({serial})')
-                while True:
-                    screenshot = get_screenshot(device)
-                    result_next_pos = find_image_on_screen(result_next_img, screenshot, threshold=0.7)
-                    if result_next_pos:
-                        print(f'result_next.png連打中→タップ ({serial})')
-                        tap(device, result_next_pos)
-                    else:
-                        print(f'result_next.png検出されなくなりました→連打終了 ({serial})')
-                        break
-                continue  # result_next処理完了後は次のループへ
+            # ただし、box-key_list_close.pngが表示されている場合は検知しない
+            box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+            if not box_key_close_pos:
+                result_next_pos = find_image_on_screen(result_next_img, screenshot, threshold=0.85)
+                if result_next_pos:
+                    print(f'result_next.png検出→連打開始 ({serial})')
+                    while True:
+                        screenshot = get_screenshot(device)
+                        # 連打中もbox-key_list_close.pngをチェック
+                        box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+                        if box_key_close_pos:
+                            print(f'連打中にbox-key_list_close.png検出 → 連打停止 ({serial})')
+                            break
+                        result_next_pos = find_image_on_screen(result_next_img, screenshot, threshold=0.85)
+                        if result_next_pos:
+                            print(f'result_next.png連打中→タップ ({serial})')
+                            safe_tap(device, result_next_pos, team_3_pos, serial, 'result_next.png')
+                        else:
+                            print(f'result_next.png検出されなくなりました→連打終了 ({serial})')
+                            break
+                    continue  # result_next処理完了後は次のループへ
             
             # 新しい監視・タップ処理
             # ①back.pngを検知したらタップ
@@ -210,7 +257,7 @@ def device_worker(port):
                 box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.7)
                 if box_key_close_pos:
                     print(f'score_1.png検出→box-key_list_close.pngタップ ({serial})')
-                    tap(device, box_key_close_pos)
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
                 else:
                     print(f'score_1.png検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
@@ -261,7 +308,7 @@ def device_worker(port):
                 box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.7)
                 if box_key_close_pos:
                     print(f'team.png検出→box-key_list_close.pngタップ ({serial})')
-                    tap(device, box_key_close_pos)
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
                 else:
                     print(f'team.png検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
@@ -272,20 +319,16 @@ def device_worker(port):
                 box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
                 if box_key_close_pos:
                     print(f'yubin.png検出→box-key_list_close.pngタップ ({serial})')
-                    tap(device, box_key_close_pos)
+                    safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
                 else:
                     print(f'yubin.png検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
             
-            # ⑨team_3.pngを検知した場合（score_redJ.png検知時は抑制）
-            team_3_pos = find_image_on_screen(team_3_img, screenshot, threshold=0.8)
-            if team_3_pos:
-                score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
-                if score_redJ_pos:
-                    print(f'team_3.png検出したがscore_redJ.png表示中のためタップ抑制 ({serial})')
-                else:
-                    print(f'team_3.png検出→タップ ({serial})')
-                    tap(device, team_3_pos)
+            # ⑨box-key_list_close.pngを検知したら直接タップ
+            box_key_close_pos = find_image_on_screen(box_key_list_close_img, screenshot, threshold=0.8)
+            if box_key_close_pos:
+                print(f'box-key_list_close.png検出→タップ ({serial})')
+                safe_tap(device, box_key_close_pos, team_3_pos, serial, 'box-key_list_close.png')
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
