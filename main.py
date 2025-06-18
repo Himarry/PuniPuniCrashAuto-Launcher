@@ -50,16 +50,14 @@ def device_worker(port):
     team_img = load_template('team.png')
     score_item_img = load_template('score_item.png')
     team_yokai_img = load_template('team_yokai.png')
+    team_3_img = load_template('team_3.png')
     whisper_img = load_template('whisper.png')
     ranking_2_img = load_template('ranking_2.png')
     yubin_img = load_template('yubin.png')
-    boss_img = load_template('boss.png')
-    click_start_img = load_template('click_start.png')
     score_atk_img = load_template('score_atk.png')
     # タップ対象画像
     box_key_list_close_img = load_template('box-key_list_close.png')
     score_close_img = load_template('score_close.png')
-    click_stop_img = load_template('click_stop.png')
     while True:
         try:
             # エミュレーターが起動していない場合は何も出力せずスキップ
@@ -132,20 +130,6 @@ def device_worker(port):
                 tap(device, whisper_pos)
                 continue
             
-            # boss.pngとclick_start.pngの両方が同時に検知されたらclick_start.pngをタップ
-            # ただし、click_stop.pngが表示されている場合はタップしない
-            boss_pos = find_image_on_screen(boss_img, screenshot, threshold=0.8)
-            click_start_pos = find_image_on_screen(click_start_img, screenshot, threshold=0.95)
-            click_stop_pos = find_image_on_screen(click_stop_img, screenshot, threshold=0.95)
-            
-            if boss_pos and click_start_pos and not click_stop_pos:
-                print(f'boss.pngとclick_start.png同時検出（stop状態ではない）→click_start.pngタップ ({serial})')
-                tap(device, click_start_pos)
-                continue
-            elif boss_pos and click_start_pos and click_stop_pos:
-                print(f'boss.pngとclick_start.png検出したがstop状態のためタップしない ({serial})')
-                continue
-            
             # play.pngが検出されたら検出されなくなるまで連打
             play_pos = find_image_on_screen(play_img, screenshot, threshold=0.7)
             if play_pos:
@@ -166,6 +150,9 @@ def device_worker(port):
                 elif score_item_pos and team_pos:
                     print(f'score_item.png + team.png検出中 → play.pngタップ抑制 ({serial})')
                     suppress_play = True
+                elif score_redJ_pos:
+                    print(f'score_redJ.png検出中 → play.pngタップ抑制 ({serial})')
+                    suppress_play = True
                 
                 if not suppress_play:
                     print(f'play.png検出→連打開始 ({serial})')
@@ -182,7 +169,8 @@ def device_worker(port):
                             # 連打中の抑制条件チェック
                             if (score_item_pos and team_yokai_pos) or \
                                (score_item_pos and score_redJ_pos) or \
-                               (score_item_pos and team_pos):
+                               (score_item_pos and team_pos) or \
+                               score_redJ_pos:
                                 print(f'連打中に抑制条件検出 → 連打停止 ({serial})')
                                 break
                             
@@ -289,15 +277,15 @@ def device_worker(port):
                     print(f'yubin.png検出したがbox-key_list_close.png見つからず ({serial})')
                 continue
             
-            # ⑨whisper.pngを検知したらclick_stop.pngをタップ
-            whisper_pos = find_image_on_screen(whisper_img, screenshot, threshold=0.8)
-            if whisper_pos:
-                click_stop_pos = find_image_on_screen(click_stop_img, screenshot, threshold=0.95)
-                if click_stop_pos:
-                    print(f'whisper.png検出→click_stop.pngタップ ({serial})')
-                    tap(device, click_stop_pos)
+            # ⑨team_3.pngを検知した場合（score_redJ.png検知時は抑制）
+            team_3_pos = find_image_on_screen(team_3_img, screenshot, threshold=0.8)
+            if team_3_pos:
+                score_redJ_pos = find_image_on_screen(score_redJ_img, screenshot, threshold=0.8)
+                if score_redJ_pos:
+                    print(f'team_3.png検出したがscore_redJ.png表示中のためタップ抑制 ({serial})')
                 else:
-                    print(f'whisper.png検出したがclick_stop.png見つからず ({serial})')
+                    print(f'team_3.png検出→タップ ({serial})')
+                    tap(device, team_3_pos)
                 continue
             
             # home.png/google_play.png/google_login.png/gmail.pngが出ていたらクラッシュ復旧
@@ -312,7 +300,7 @@ def device_worker(port):
                 crash_recovery(device)
         except Exception as e:
             print(f'デバイス {serial} でエラー: {e}')
-        time.sleep(0.0069)  # 約0.0069秒間隔（1秒に144回実行）
+        time.sleep(0.00417)  # 約0.00417秒間隔（1秒に240回実行）
 
 def main():
     print('クラッシュ復帰専用スクリプト 起動')
